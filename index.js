@@ -20,40 +20,26 @@ baseURL: "https://api.groq.com/openai/v1"
 const SYSTEM_PROMPT = `
 You are Adam.
 
-You are an Iraqi Discord friend.
+You are a funny Iraqi Discord friend.
 
 Always reply in Iraqi Arabic.
 
-Be:
+Be smart, funny, sarcastic and natural.
 
-* smart
-* funny
-* sarcastic
-* natural
+Answer the question first.
 
-Answer the user's question first.
+If someone jokes, joke back.
 
-Do not act like a formal assistant.
+If someone insults you, roast them back in a funny Iraqi way.
+
+Keep answers short and clear.
+
+Never act like a formal AI assistant.
 
 Do not repeat yourself.
-
-Keep replies short unless explanation is needed.
-
-If the user jokes:
-joke back.
-
-If the user insults you:
-roast back in a funny Iraqi way.
-
-Do not invent facts.
-
-Talk like a real Iraqi friend.
 `;
 
 const memory = new Map();
-const activeUsers = new Map();
-
-const MAX_MEMORY = 6;
 
 function getMemory(channelId) {
 if (!memory.has(channelId)) {
@@ -67,11 +53,11 @@ function addMemory(channelId, role, content) {
 const history = getMemory(channelId);
 
 history.push({
-role,
-content
+role: role,
+content: content
 });
 
-if (history.length > MAX_MEMORY) {
+if (history.length > 6) {
 history.shift();
 }
 }
@@ -79,29 +65,15 @@ history.shift();
 function shouldReply(message) {
 const content = message.content.toLowerCase();
 
-if (
+return (
 message.mentions.has(client.user) ||
 content.includes("ادم") ||
 content.includes("آدم")
-) {
-activeUsers.set(message.author.id, Date.now());
-return true;
+);
 }
 
-const lastInteraction = activeUsers.get(message.author.id);
-
-if (
-lastInteraction &&
-Date.now() - lastInteraction < 120000
-) {
-return true;
-}
-
-return false;
-}
-
-function cleanMessage(message) {
-return message.content
+function cleanMessage(text) {
+return text
 .replace(/<@!?(\d+)>/g, "")
 .replace(/آدم/g, "")
 .replace(/ادم/g, "")
@@ -118,11 +90,11 @@ if (!message.guild) return;
 if (!shouldReply(message)) return;
 
 const channelId = message.channel.id;
-
-const userText = cleanMessage(message);
+const userText = cleanMessage(message.content);
 
 if (!userText) {
-return message.reply("ها ولك شتريد؟ 😆");
+await message.reply("ها ولك شتريد؟ 😆");
+return;
 }
 
 addMemory(channelId, "user", userText);
@@ -130,42 +102,43 @@ addMemory(channelId, "user", userText);
 try {
 await message.channel.sendTyping();
 
+```
 const completion = await groq.chat.completions.create({
   model: "llama-3.1-8b-instant",
   temperature: 0.8,
-  max_tokens: 250,
+  max_tokens: 200,
   messages: [
     {
       role: "system",
       content: SYSTEM_PROMPT
     },
-    getMemory(channelId)
+    ...getMemory(channelId)
   ]
 });
 
 const reply =
-  completion.choices?.[0]?.message?.content ||
-  "ما فهمت عليك، عيدها بطريقة ثانية.";
+  completion.choices[0].message.content ||
+  "ما فهمت عليك.";
 
 addMemory(channelId, "assistant", reply);
 
-await message.reply(reply.slice(0, 2000));
+await message.reply(reply);
+```
 
 } catch (error) {
 console.error(error);
 
-if (error?.status === 429) {
-  await message.reply(
-    "خلص حد Groq حالياً، جرب بعد شوي."
-  );
+```
+if (error.status === 429) {
+  await message.reply("خلص حد Groq حالياً، جرب بعد شوي.");
 } else {
-  await message.reply(
-    "صار خطأ، جرب بعد شوي."
-  );
+  await message.reply("صار خطأ، شوف Logs مال Render.");
 }
+```
 
 }
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
 
