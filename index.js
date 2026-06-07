@@ -100,20 +100,19 @@ return;
 addMemory(channelId, "user", userText);
 
 try {
-await message.channel.sendTyping();
+  await message.channel.sendTyping();
 
-```
 const completion = await groq.chat.completions.create({
   model: "llama-3.1-8b-instant",
   temperature: 0.8,
   max_tokens: 200,
   messages: [
-    {
-      role: "system",
-      content: SYSTEM_PROMPT
-    },
-    ...getMemory(channelId)
-  ]
+  {
+    role: "system",
+    content: SYSTEM_PROMPT
+  },
+  ...getMemory(channelId)
+]
 });
 
 const reply =
@@ -123,18 +122,15 @@ const reply =
 addMemory(channelId, "assistant", reply);
 
 await message.reply(reply);
-```
 
 } catch (error) {
 console.error(error);
 
-```
 if (error.status === 429) {
   await message.reply("خلص حد Groq حالياً، جرب بعد شوي.");
 } else {
   await message.reply("صار خطأ، شوف Logs مال Render.");
 }
-```
 
 }
 });
