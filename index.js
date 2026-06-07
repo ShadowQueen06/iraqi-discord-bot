@@ -130,7 +130,6 @@ addMemory(channelId, "user", userText);
 try {
 await message.channel.sendTyping();
 
-```
 const completion = await groq.chat.completions.create({
   model: "llama-3.1-8b-instant",
   temperature: 0.8,
@@ -140,7 +139,7 @@ const completion = await groq.chat.completions.create({
       role: "system",
       content: SYSTEM_PROMPT
     },
-    ...getMemory(channelId)
+    getMemory(channelId)
   ]
 });
 
@@ -151,12 +150,10 @@ const reply =
 addMemory(channelId, "assistant", reply);
 
 await message.reply(reply.slice(0, 2000));
-```
 
 } catch (error) {
 console.error(error);
 
-```
 if (error?.status === 429) {
   await message.reply(
     "خلص حد Groq حالياً، جرب بعد شوي."
@@ -166,7 +163,6 @@ if (error?.status === 429) {
     "صار خطأ، جرب بعد شوي."
   );
 }
-```
 
 }
 });
