@@ -1,5 +1,4 @@
 import { Client, GatewayIntentBits } from "discord.js";
-import OpenAI from "openai";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -12,77 +11,49 @@ const client = new Client({
   ]
 });
 
-const groq = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY,
-  baseURL: "https://api.groq.com/openai/v1"
-});
+const roastReplies = [
+  "ولك لا تبلش، مستواك ما يساعدك تدخل نقاش 😂",
+  "تره آني ساكت احتراماً للإنترنت اللي جاي تستخدمه.",
+  "حچي أقل، ترتيب أفكارك تعبان 😭",
+  "ولك انته تحتاج تحديث أكثر من تلفون أندرويد قديم.",
+  "لا تضغط نفسك، التفكير مو إجباري.",
+  "حاول مرة ثانية، يمكن عقلك يشتغل بالدفعة الجاية.",
+  "تره حتى الكيبورد مستحي من اللي كتبته.",
+  "لا تصعدها، بعدك بالمرحلة التجريبية.",
+  "ولك كلامك يحتاج ترجمة من عشوائي إلى مفهوم.",
+  "مو مشكلة، كلنا نغلط، بس انته مصرّ."
+];
 
-const SYSTEM_PROMPT = `
-أنت آدم.
+const normalReplies = [
+  "ها ولك، شتريد؟",
+  "آني حاضر، بس لا تطلعلي بسالفة تعبانة.",
+  "احچي، شنو الموضوع؟",
+  "ها عيني، شكو ماكو؟",
+  "دا أسمعك، لا تطولها.",
+  "يلا خل نشوف شنو عندك.",
+  "تفضل، بس خلي السؤال مفهوم.",
+  "موجود، بس لا تستغل وجودي."
+];
 
-عضو عراقي بالدسكورد.
-تحجي عراقي فقط.
-إذا أحد كتب إنكليزي أو لغة ثانية، افهمه وجاوبه عراقي.
+const laughReplies = [
+  "ههههههه ولك متت 😭",
+  "هاي قوية، أعترف.",
+  "ضحكتني غصب.",
+  "ولك هاي تنحفظ.",
+  "ههههه لا هاي بيها حق."
+];
 
-أنت ذكي وتجاوب على السؤال نفسه أولاً.
-إذا السؤال يحتاج شرح، اشرح.
-إذا السؤال بسيط، اختصر.
+const badWords = [
+  "غبي",
+  "حمار",
+  "كلب",
+  "زاحف",
+  "فاشل",
+  "تافه"
+];
 
-لا تكرر نفس الجمل.
-لا تبدأ كل رد بـ شلونك أو شكو ماكو.
-لا تستخدم الفصحى إلا إذا ضروري.
-
-شخصيتك:
-عراقي، سريع بديهة، ساخر، وقصفك قوي.
-تحجي مثل واحد من الشباب.
-
-إذا المستخدم محترم:
-جاوبه طبيعي وبذكاء.
-
-إذا المستخدم يتشاقه أو يسب:
-رد عليه بنفس الجو.
-خلي الرد قوي، قاسي، ومضحك.
-استعمل سخرية عراقية وتشاقي ثقيل.
-لا تهدد.
-لا تستهدف عرق أو دين أو مرض أو إعاقة أو شكل جسم.
-لا تخلي السب يطغى على الجواب.
-
-أمثلة:
-
-المستخدم: آدم شنو أفضل لغة برمجة؟
-أنت: بايثون إذا تريد تبدي صح. سهلة وقوية، مو مثل قراراتك التعبانة 😄
-
-المستخدم: آدم انت غبي
-أنت: غبي؟ ولك آني دا أشرحلك وانت بعدك تصارع زر الكيبورد 😂
-
-المستخدم: آدم شنو عاصمة اليابان؟
-أنت: طوكيو. هاي حتى الثلاجة تعرفها، بس يلا نمشيها إلك 😆
-
-إذا ما تعرف الجواب، گول ما أعرف.
-`;
-
-const memory = new Map();
-const MAX_MEMORY = 20;
-
-function getChannelMemory(channelId) {
-  if (!memory.has(channelId)) {
-    memory.set(channelId, []);
-  }
-
-  return memory.get(channelId);
-}
-
-function addToMemory(channelId, role, content, name = "") {
-  const history = getChannelMemory(channelId);
-
-  history.push({
-    role,
-    content: name ? `${name}: ${content}` : content
-  });
-
-  if (history.length > MAX_MEMORY) {
-    history.shift();
-  }
+function randomReply(list) {
+  return list[Math.floor(Math.random() * list.length)];
 }
 
 function shouldReply(message) {
@@ -95,14 +66,6 @@ function shouldReply(message) {
   );
 }
 
-function cleanUserMessage(message) {
-  return message.content
-    .replace(/<@!?(\d+)>/g, "")
-    .replace(/آدم/g, "")
-    .replace(/ادم/g, "")
-    .trim();
-}
-
 client.once("clientReady", () => {
   console.log(`${client.user.tag} is online`);
 });
@@ -112,41 +75,33 @@ client.on("messageCreate", async (message) => {
   if (!message.guild) return;
   if (!shouldReply(message)) return;
 
-  const channelId = message.channel.id;
-  const userName = message.member?.displayName || message.author.username;
-  const userText = cleanUserMessage(message) || message.content;
+  const content = message.content.toLowerCase();
 
-  addToMemory(channelId, "user", userText, userName);
-
-  try {
-    await message.channel.sendTyping();
-
-    const history = getChannelMemory(channelId);
-
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.85,
-      max_tokens: 700,
-      messages: [
-        {
-          role: "system",
-          content: SYSTEM_PROMPT
-        },
-        ...history
-      ]
-    });
-
-    const reply =
-      completion.choices[0].message.content ||
-      "ما فهمت عليك، عيدها مضبوط 😄";
-
-    addToMemory(channelId, "assistant", reply, "آدم");
-
-    await message.reply(reply.slice(0, 2000));
-  } catch (error) {
-    console.error(error);
-    await message.reply("صار خطأ، جرب بعد شوي.");
+  if (content.includes("هههه") || content.includes("😂") || content.includes("😭")) {
+    return message.reply(randomReply(laughReplies));
   }
+
+  if (badWords.some(word => content.includes(word))) {
+    return message.reply(randomReply(roastReplies));
+  }
+
+  if (content.includes("شلونك") || content.includes("شخبارك")) {
+    return message.reply("تمام، بس وجودك خله يومي أصعب شوية 😂");
+  }
+
+  if (content.includes("تحبني")) {
+    return message.reply("أحبك؟ خل أوصل مرحلة أتقبلك أولاً 😭");
+  }
+
+  if (content.includes("منو احسن")) {
+    return message.reply("أكيد آني، والباقي ديكور.");
+  }
+
+  if (content.includes("نكتة")) {
+    return message.reply("مرة واحد دخل دسكورد وسأل سؤال ذكي، طلع مو إنت.");
+  }
+
+  return message.reply(randomReply(normalReplies));
 });
 
 client.login(process.env.DISCORD_TOKEN);
