@@ -157,5 +157,6 @@ if (error.status === 429) {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+}
 
 
