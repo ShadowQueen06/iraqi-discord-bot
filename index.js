@@ -1,4 +1,5 @@
 import { Client, GatewayIntentBits } from "discord.js";
+import OpenAI from "openai";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -11,80 +12,53 @@ const client = new Client({
   ]
 });
 
-const lastReplies = new Map();
+const groq = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1"
+});
 
-const replies = {
-  empty: [
-    "زين إذا ما عندك شي ليش مصيحني؟",
-    "ماكو شي؟ خوش اجتماع هذا.",
-    "ولك ناديتني علمود الصمت؟",
-    "تمام، رجعني منين ما جبتني.",
-    "إذا ما عندك سالفة لا تسويلي إشعار."
-  ],
+const SYSTEM_PROMPT = `
+أنت آدم.
 
-  roast: [
-    "ولك كلامك محتاج فورمات.",
-    "تره عقلك يشتغل لو يحتاج شاحن؟",
-    "لا تناقشني وانت بعدك بالنسخة التجريبية.",
-    "مستواك بالنقاش مثل نت الساعة 12 بالليل.",
-    "ولك حتى الغوغل يستسلم من أسئلتك.",
-    "حچي أقل، الضرر يقل.",
-    "تره مو كل فكرة تطلع براسك لازم تنكتب.",
-    "إنت مو غلطان، بس مخك ما متفق وياك.",
-    "ولك ترتيب أفكارك مثل كيس علاوي الحلة.",
-    "إذا هاي بداية كلامك، النهاية تخوف."
-  ],
+تحجي عراقي فقط.
+افهم أي كلام، بس رد عراقي.
 
-  normal: [
-    "ها ولك، شتريد؟",
-    "احچي، بس اختصر الدراما.",
-    "يلا شنو السالفة؟",
-    "دا أسمعك، لا تخليها محاضرة.",
-    "تفضل، بس خلي كلامك مفهوم.",
-    "ها عيني، شنو الموضوع؟",
-    "موجود، بس لا تطلعلي بسالفة تعبانة.",
-    "احچي خل أشوف شنو عندك.",
-    "يلا وريني العبقرية مال اليوم.",
-    "ها، نبدأ لو بعدك تجمع أفكارك؟"
-  ],
+أنت ذكي، سريع رد، وتشاقيك قوي.
+جاوب على السؤال نفسه أولاً.
 
-  laugh: [
-    "ههههه هاي بيها حق.",
-    "لا هاي ضحكتني غصب.",
-    "ولك هاي تنحفظ.",
-    "ضحكت بس لا تعيدها وتخربها.",
-    "ههههه تمام، هاي محسوبة إلك."
-  ],
+لا تكرر نفس الكلام.
+لا تبدأ كل رد بـ شلونك أو شكو ماكو.
+لا تسوي نفسك مساعد رسمي.
 
-  love: [
-    "أحبك؟ خل أوصل مرحلة أتقبلك أولاً.",
-    "الحب مسؤولية، وإنت مسؤولياتك مو مبشرة.",
-    "أحبك بس من بعيد، حتى الشبكة ترتاح.",
-    "أحبك مثل ما أحب تحديثات الويندوز.",
-    "خل نبقى أصحاب أحسن، الوضع ما يطمن."
-  ],
+إذا المستخدم يمزح أو يستفزك:
+رد عليه بقصف عراقي ذكي ومضحك.
+خليك لاذع، بس لا تهدد ولا تستهدف عرق أو دين أو مرض أو إعاقة.
 
-  joke: [
-    "مرة واحد سأل سؤال ذكي بالدسكورد، طلع مو إنت.",
-    "نكتتي اليوم؟ وجودك أونلاين.",
-    "مرة عقل دخل راسك، ضاع وما رجع.",
-    "مرة واحد گال عندي سالفة، طلعت رسالتك.",
-    "النكتة؟ إنك تنتظر مني احترام مجاني."
-  ]
-};
+إذا السؤال جدي:
+جاوب بوضوح وبذكاء.
 
-const badWords = [
-  "غبي",
-  "حمار",
-  "كلب",
-  "فاشل",
-  "تافه",
-  "زاحف",
-  "مطّي",
-  "ابن",
-  "كس",
-  "قح"
-];
+خلي الرد قصير غالباً.
+إذا يحتاج شرح، اشرح.
+`;
+
+const memory = new Map();
+const MAX_MEMORY = 8;
+
+function getMemory(channelId) {
+  if (!memory.has(channelId)) memory.set(channelId, []);
+  return memory.get(channelId);
+}
+
+function addMemory(channelId, role, content, name = "") {
+  const history = getMemory(channelId);
+
+  history.push({
+    role,
+    content: name ? `${name}: ${content}` : content
+  });
+
+  if (history.length > MAX_MEMORY) history.shift();
+}
 
 function shouldReply(message) {
   const content = message.content.toLowerCase();
@@ -96,21 +70,12 @@ function shouldReply(message) {
   );
 }
 
-function pickReply(channelId, list) {
-  const recent = lastReplies.get(channelId) || [];
-
-  const available = list.filter(reply => !recent.includes(reply));
-  const pool = available.length ? available : list;
-
-  const reply = pool[Math.floor(Math.random() * pool.length)];
-
-  recent.push(reply);
-
-  if (recent.length > 5) recent.shift();
-
-  lastReplies.set(channelId, recent);
-
-  return reply;
+function cleanMessage(message) {
+  return message.content
+    .replace(/<@!?(\d+)>/g, "")
+    .replace(/آدم/g, "")
+    .replace(/ادم/g, "")
+    .trim();
 }
 
 client.once("clientReady", () => {
@@ -123,35 +88,43 @@ client.on("messageCreate", async (message) => {
   if (!shouldReply(message)) return;
 
   const channelId = message.channel.id;
+  const userName = message.member?.displayName || message.author.username;
+  const userText = cleanMessage(message) || message.content;
 
-  const content = message.content
-    .replace(/<@!?(\d+)>/g, "")
-    .replace(/آدم/g, "")
-    .replace(/ادم/g, "")
-    .trim()
-    .toLowerCase();
+  addMemory(channelId, "user", userText, userName);
 
-  if (!content || content.includes("ماعندي شي") || content.includes("ماكو شي")) {
-    return message.reply(pickReply(channelId, replies.empty));
+  try {
+    await message.channel.sendTyping();
+
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      temperature: 0.9,
+      max_tokens: 300,
+      messages: [
+        {
+          role: "system",
+          content: SYSTEM_PROMPT
+        },
+        ...getMemory(channelId)
+      ]
+    });
+
+    const reply =
+      completion.choices[0].message.content ||
+      "ما فهمت عليك، عيدها مضبوط 😄";
+
+    addMemory(channelId, "assistant", reply, "آدم");
+
+    await message.reply(reply.slice(0, 2000));
+  } catch (error) {
+    console.error(error);
+
+    if (error.status === 429) {
+      await message.reply("خلص حد Groq شوي، انتظر كم دقيقة ورجع جرب.");
+    } else {
+      await message.reply("صار خطأ، جرب بعد شوي.");
+    }
   }
-
-  if (content.includes("هههه") || content.includes("😂") || content.includes("😭")) {
-    return message.reply(pickReply(channelId, replies.laugh));
-  }
-
-  if (content.includes("تحبني")) {
-    return message.reply(pickReply(channelId, replies.love));
-  }
-
-  if (content.includes("نكتة")) {
-    return message.reply(pickReply(channelId, replies.joke));
-  }
-
-  if (badWords.some(word => content.includes(word))) {
-    return message.reply(pickReply(channelId, replies.roast));
-  }
-
-  return message.reply(pickReply(channelId, replies.normal));
 });
 
 client.login(process.env.DISCORD_TOKEN);
