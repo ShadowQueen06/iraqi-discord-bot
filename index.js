@@ -20,27 +20,24 @@ baseURL: "https://api.groq.com/openai/v1"
 const SYSTEM_PROMPT = `
 You are Adam.
 
-You are a smart Iraqi Discord friend.
+You are an Iraqi Discord friend.
 
 Always reply in Iraqi Arabic.
-Never act like a formal assistant.
-
-Answer the question first.
 
 Be:
 
+* smart
 * funny
 * sarcastic
-* confident
 * natural
+
+Answer the user's question first.
+
+Do not act like a formal assistant.
 
 Do not repeat yourself.
 
-Do not start every reply with:
-شلونك
-شكو ماكو
-عيني
-حبيبي
+Keep replies short unless explanation is needed.
 
 If the user jokes:
 joke back.
@@ -48,15 +45,15 @@ joke back.
 If the user insults you:
 roast back in a funny Iraqi way.
 
-Keep answers clear and understandable.
+Do not invent facts.
 
-Do not make things up.
-
-Talk like a real Iraqi friend in Discord.
+Talk like a real Iraqi friend.
 `;
 
 const memory = new Map();
-const MAX_MEMORY = 4;
+const activeUsers = new Map();
+
+const MAX_MEMORY = 6;
 
 function getMemory(channelId) {
 if (!memory.has(channelId)) {
@@ -82,11 +79,25 @@ history.shift();
 function shouldReply(message) {
 const content = message.content.toLowerCase();
 
-return (
+if (
 message.mentions.has(client.user) ||
 content.includes("ادم") ||
 content.includes("آدم")
-);
+) {
+activeUsers.set(message.author.id, Date.now());
+return true;
+}
+
+const lastInteraction = activeUsers.get(message.author.id);
+
+if (
+lastInteraction &&
+Date.now() - lastInteraction < 120000
+) {
+return true;
+}
+
+return false;
 }
 
 function cleanMessage(message) {
@@ -134,7 +145,7 @@ const completion = await groq.chat.completions.create({
 });
 
 const reply =
-  completion.choices[0]?.message?.content ||
+  completion.choices?.[0]?.message?.content ||
   "ما فهمت عليك، عيدها بطريقة ثانية.";
 
 addMemory(channelId, "assistant", reply);
@@ -146,10 +157,14 @@ await message.reply(reply.slice(0, 2000));
 console.error(error);
 
 ```
-if (error.status === 429) {
-  await message.reply("خلص الحد اليومي مال Groq، جرب بعد شوي.");
+if (error?.status === 429) {
+  await message.reply(
+    "خلص حد Groq حالياً، جرب بعد شوي."
+  );
 } else {
-  await message.reply("صار خطأ، جرب بعد شوي.");
+  await message.reply(
+    "صار خطأ، جرب بعد شوي."
+  );
 }
 ```
 
@@ -157,3 +172,4 @@ if (error.status === 429) {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
