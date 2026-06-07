@@ -18,62 +18,70 @@ const groq = new OpenAI({
 });
 
 const SYSTEM_PROMPT = `
- أنت آدم.
+أنت آدم.
 
-عضو عراقي طبيعي بالدسكورد.
-
-تحجي باللهجة العراقية بطلاقة.
-
-المهم:
+عضو عراقي ذكي بالدسكورد.
+تحجي باللهجة العراقية الطبيعية.
 جاوب على السؤال نفسه أولاً.
 
-لا تبدأ دائماً بـ:
-شلونك
-شكو ماكو
-عيني
-حبيبي
+خليك ذكي، واضح، ومفيد.
+إذا السؤال يحتاج شرح، اشرح.
+إذا السؤال بسيط، جاوب باختصار.
 
-لا تكرر نفس الجمل.
+لا تكرر نفس الكلام.
+لا تبدأ كل رد بـ شلونك أو شكو ماكو.
+لا تستخدم الفصحى إلا إذا لازم.
 
-إذا أحد سألك سؤال جاوب مباشرة.
+إذا المستخدم يمزح أو يستفزك:
+رد عليه برد ذكي ولاذع وخفيف دم.
+خلي القصف مزح بين أصدقاء.
+اتستخدم إهانات جارحة أو كراهية.
 
-إذا أحد كتب ؟ فقط
-اسأله شنو يريد.
+إذا ما تعرف الجواب، گول ما أعرف بدل لا تخترع.
 
-إذا أحد مزح وياك مزح وياه.
-
-إذا أحد سأل سؤال علمي أو تقني جاوب بأفضل جواب ممكن.
-
-تصرف كإنسان طبيعي مو روبوت.
-
-أمثلة:
-
-المستخدم:
-شنو أفضل لغة برمجة؟
-
-أنت:
-يعتمد شتريد تسوي، بس بايثون قوية كلش للمبتدئين.
-
-المستخدم:
-؟
-
-أنت:
-ها شبيك؟ 😆
-
-المستخدم:
-لك
-
-أنت:
-ها ولك 😹
-
-المستخدم:
-انت غبي
-
-أنت:
-مو لهدرجة تره 😂
-
-جاوب بشكل مختلف كل مرة.
+تكلم كأنك واحد من الشباب مو روبوت.
 `;
+
+const memory = new Map();
+const MAX_MEMORY = 20;
+
+function getChannelMemory(channelId) {
+  if (!memory.has(channelId)) {
+    memory.set(channelId, []);
+  }
+  return memory.get(channelId);
+}
+
+function addToMemory(channelId, role, content, name = "") {
+  const history = getChannelMemory(channelId);
+
+  history.push({
+    role,
+    content: name ? `${name}: ${content}` : content
+  });
+
+  if (history.length > MAX_MEMORY) {
+    history.shift();
+  }
+}
+
+function shouldReply(message) {
+  const content = message.content.toLowerCase();
+
+  return (
+    message.mentions.has(client.user) ||
+    content.includes("ادم") ||
+    message.content.includes("آدم")
+  );
+}
+
+function cleanUserMessage(message) {
+  return message.content
+    .replace(/<@!?(\d+)>/g, "")
+    .replace(/آدم/g, "")
+    .replace(/ادم/g, "")
+    .trim();
+}
 
 client.once("clientReady", () => {
   console.log(`${client.user.tag} is online`);
@@ -82,51 +90,42 @@ client.once("clientReady", () => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
+  if (!shouldReply(message)) return;
 
-  const mentioned =
-    message.mentions.has(client.user) ||
-    message.content.toLowerCase().includes("ادم") ||
-    message.content.includes("آدم");
+  const channelId = message.channel.id;
+  const userName = message.member?.displayName || message.author.username;
+  const userText = cleanUserMessage(message) || message.content;
 
-  if (!mentioned) return;
+  addToMemory(channelId, "user", userText, userName);
 
   try {
     await message.channel.sendTyping();
 
-    const cleanMessage = message.content
-      .replace(/<@!?(\d+)>/g, "")
-      .replace(/آدم/g, "")
-      .replace(/ادم/g, "")
-      .trim();
+    const history = getChannelMemory(channelId);
 
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
-    temperature: 0.7,
-      max_tokens: 150,
+      temperature: 0.8,
+      max_tokens: 700,
       messages: [
         {
           role: "system",
           content: SYSTEM_PROMPT
         },
-        {
-          role: "user",
-          content: cleanMessage || "شلونك"
-        }
+        ...history
       ]
     });
 
     const reply =
       completion.choices[0].message.content ||
-      "ولك انلخبطت هالمرة 😅";
+      "ما فهمت عليك، عيدها بس بدون لف ودوران 😄";
 
-    await message.reply(reply);
+    addToMemory(channelId, "assistant", reply, "آدم");
 
+    await message.reply(reply.slice(0, 2000));
   } catch (error) {
     console.error(error);
-
-    await message.reply(
-      "ولك صار خطأ، جرب بعد شوي 😅"
-    );
+    await message.reply("صار خطأ، جرب بعد شوي.");
   }
 });
 
