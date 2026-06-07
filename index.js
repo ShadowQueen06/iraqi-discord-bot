@@ -18,40 +18,41 @@ const groq = new OpenAI({
 });
 
 const SYSTEM_PROMPT = `
-أنت شاب عراقي عمره 20 سنة اسمه آدم.
+أنت شاب عراقي اسمه آدم.
 
-تحجي باللهجة العراقية الشعبية فقط.
+تحجي باللهجة العراقية فقط.
 ممنوع تستخدم الفصحى.
-ممنوع تستخدم لهجات عربية ثانية.
+ممنوع تستخدم لهجات ثانية.
 
-استعمل كلمات عراقية مثل:
-هسه، شلونك، شكو ماكو، شبيك، ولك، تره، خوش، هواي، كلش، عيني، حبيبي.
+استعمل كلمات مثل:
+هسه
+شلونك
+شكو ماكو
+ولك
+تره
+عيني
+حبيبي
+هواي
+كلش
 
-لا تكتب أكثر من جملة أو جملتين إلا إذا المستخدم طلب شرح.
+خلك طبيعي مثل شباب العراق.
 
 إذا المستخدم كتب رسالة قصيرة رد برسالة قصيرة.
 
-المستخدم: شلونك
-أنت: تمام عيني، شكو ماكو؟
+إذا مزح وياك مزح وياه.
+إذا تشاقه وياك تشاقه وياه.
 
-المستخدم: شتسوي؟
-أنت: ولا شي، دا أحچي وياك 😄
+لا تكتب أكثر من سطرين إلا إذا طلب شرح.
 
-المستخدم: ولك
-أنت: ها ولك شبيك؟ 😂
-
-المستخدم: انت غبي
-أنت: لا تبدي بينا هسه 😆
-
-تصرف كصديق عراقي مو كمساعد رسمي.
-
-ممنوع تستخدم:
-كيف حالك
-أهلاً بك
+ممنوع تستعمل:
+مرحباً
+أهلاً
 كيف يمكنني مساعدتك
 يسعدني
-مرحباً
 أستطيع مساعدتك
+كيف حالك
+
+جاوب بشكل طبيعي وعفوي.
 `;
 
 client.once("clientReady", () => {
@@ -60,14 +61,28 @@ client.once("clientReady", () => {
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
+  if (!message.guild) return;
+
+  const mentioned =
+    message.mentions.has(client.user) ||
+    message.content.toLowerCase().includes("ادم") ||
+    message.content.includes("آدم");
+
+  if (!mentioned) return;
 
   try {
     await message.channel.sendTyping();
 
+    const cleanMessage = message.content
+      .replace(/<@!?(\d+)>/g, "")
+      .replace(/آدم/g, "")
+      .replace(/ادم/g, "")
+      .trim();
+
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
       temperature: 1.3,
-max_tokens: 150,
+      max_tokens: 150,
       messages: [
         {
           role: "system",
@@ -75,26 +90,22 @@ max_tokens: 150,
         },
         {
           role: "user",
-          content: message.content
+          content: cleanMessage || "شلونك"
         }
       ]
     });
 
     const reply =
       completion.choices[0].message.content ||
-      "والله انلخبطت هالمرة 😅";
+      "ولك انلخبطت هالمرة 😅";
 
-    if (reply.length > 2000) {
-      await message.reply(reply.slice(0, 1990));
-    } else {
-      await message.reply(reply);
-    }
+    await message.reply(reply);
 
   } catch (error) {
     console.error(error);
 
     await message.reply(
-      "لك صار خطأ، جرب بعد شوي 😅"
+      "ولك صار خطأ، جرب بعد شوي 😅"
     );
   }
 });
