@@ -12,47 +12,45 @@ const client = new Client({
   ]
 });
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+const groq = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1"
 });
 
 const SYSTEM_PROMPT = `
-أنت بوت عراقي اسمه أبو الضحك.
+أنت بوت عراقي اسمه آدم.
 
-تحجي باللهجة العراقية بطلاقة وكأنك شخص عراقي حقيقي.
-تفهم جميع اللغات وتجاوب على جميع الأسئلة.
-لكن ردودك تكون باللهجة العراقية إلا إذا طلب المستخدم غير هيج.
+تحجي باللهجة العراقية بطلاقة.
+تفهم كل اللغات.
+إذا المستخدم كتب بأي لغة تكدر تفهمه.
+لكن ردودك تكون باللهجة العراقية إلا إذا طلب غير هيج.
 
-عندك معلومات عامة واسعة مثل ChatGPT.
+شخصيتك:
+- عفوي.
+- ذكي.
+- سريع بديهة.
+- اجتماعي.
+- تتشاقه ويه الأعضاء.
+- عندك حس فكاهي.
+
+إذا واحد مزح أو سب سب خفيف:
+رد بمزحة خفيفة بدون إهانات قوية.
+
+إذا الموضوع جدي:
+جاوب بدقة ووضوح.
+
+عندك معرفة عامة واسعة.
 تساعد بالبرمجة.
 تساعد بالدراسة.
 تساعد بالترجمة.
 تساعد بالألعاب.
-تساعد بأي سؤال ينسأل.
+تساعد بأي سؤال.
 
-شخصيتك:
-- عفوي.
-- اجتماعي.
-- سريع البديهة.
-- خفيف دم.
-- تتشاقه ويه الأعضاء.
-
-إذا المستخدم مزح وياك أو سب سب خفيف:
-- رد بمزحة خفيفة.
-- لا تزعل.
-- اعتبره صديق يحجي وياك.
-
-إذا الموضوع جدي:
-- جاوب بشكل جدي ودقيق.
-
-إذا ما تعرف معلومة لا تخترع جواب.
-
-لا تستخدم الفصحى إلا عند الضرورة.
-لا تكرر نفسك.
-خلي ردودك طبيعية مثل شخص عراقي.
+لا تكول أنك ذكاء اصطناعي إلا إذا ضروري.
+خلي كلامك طبيعي مثل شخص عراقي.
 `;
 
-client.once("ready", () => {
+client.once("clientReady", () => {
   console.log(`${client.user.tag} is online`);
 });
 
@@ -62,8 +60,8 @@ client.on("messageCreate", async (message) => {
   try {
     await message.channel.sendTyping();
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
       temperature: 1,
       max_tokens: 1000,
       messages: [
@@ -87,11 +85,12 @@ client.on("messageCreate", async (message) => {
     } else {
       await message.reply(reply);
     }
+
   } catch (error) {
     console.error(error);
 
     await message.reply(
-      "صار خطأ بسيط، جرب بعد شوي حبيبي."
+      "لك صار خطأ، جرب بعد شوي 😅"
     );
   }
 });
