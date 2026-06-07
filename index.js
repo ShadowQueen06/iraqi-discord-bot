@@ -11,50 +11,80 @@ const client = new Client({
   ]
 });
 
-const roastReplies = [
-  "ولك لا تبلش، مستواك ما يساعدك تدخل نقاش 😂",
-  "تره آني ساكت احتراماً للإنترنت اللي جاي تستخدمه.",
-  "حچي أقل، ترتيب أفكارك تعبان 😭",
-  "ولك انته تحتاج تحديث أكثر من تلفون أندرويد قديم.",
-  "لا تضغط نفسك، التفكير مو إجباري.",
-  "حاول مرة ثانية، يمكن عقلك يشتغل بالدفعة الجاية.",
-  "تره حتى الكيبورد مستحي من اللي كتبته.",
-  "لا تصعدها، بعدك بالمرحلة التجريبية.",
-  "ولك كلامك يحتاج ترجمة من عشوائي إلى مفهوم.",
-  "مو مشكلة، كلنا نغلط، بس انته مصرّ."
-];
+const lastReplies = new Map();
 
-const normalReplies = [
-  "ها ولك، شتريد؟",
-  "آني حاضر، بس لا تطلعلي بسالفة تعبانة.",
-  "احچي، شنو الموضوع؟",
-  "ها عيني، شكو ماكو؟",
-  "دا أسمعك، لا تطولها.",
-  "يلا خل نشوف شنو عندك.",
-  "تفضل، بس خلي السؤال مفهوم.",
-  "موجود، بس لا تستغل وجودي."
-];
+const replies = {
+  empty: [
+    "زين إذا ما عندك شي ليش مصيحني؟",
+    "ماكو شي؟ خوش اجتماع هذا.",
+    "ولك ناديتني علمود الصمت؟",
+    "تمام، رجعني منين ما جبتني.",
+    "إذا ما عندك سالفة لا تسويلي إشعار."
+  ],
 
-const laughReplies = [
-  "ههههههه ولك متت 😭",
-  "هاي قوية، أعترف.",
-  "ضحكتني غصب.",
-  "ولك هاي تنحفظ.",
-  "ههههه لا هاي بيها حق."
-];
+  roast: [
+    "ولك كلامك محتاج فورمات.",
+    "تره عقلك يشتغل لو يحتاج شاحن؟",
+    "لا تناقشني وانت بعدك بالنسخة التجريبية.",
+    "مستواك بالنقاش مثل نت الساعة 12 بالليل.",
+    "ولك حتى الغوغل يستسلم من أسئلتك.",
+    "حچي أقل، الضرر يقل.",
+    "تره مو كل فكرة تطلع براسك لازم تنكتب.",
+    "إنت مو غلطان، بس مخك ما متفق وياك.",
+    "ولك ترتيب أفكارك مثل كيس علاوي الحلة.",
+    "إذا هاي بداية كلامك، النهاية تخوف."
+  ],
+
+  normal: [
+    "ها ولك، شتريد؟",
+    "احچي، بس اختصر الدراما.",
+    "يلا شنو السالفة؟",
+    "دا أسمعك، لا تخليها محاضرة.",
+    "تفضل، بس خلي كلامك مفهوم.",
+    "ها عيني، شنو الموضوع؟",
+    "موجود، بس لا تطلعلي بسالفة تعبانة.",
+    "احچي خل أشوف شنو عندك.",
+    "يلا وريني العبقرية مال اليوم.",
+    "ها، نبدأ لو بعدك تجمع أفكارك؟"
+  ],
+
+  laugh: [
+    "ههههه هاي بيها حق.",
+    "لا هاي ضحكتني غصب.",
+    "ولك هاي تنحفظ.",
+    "ضحكت بس لا تعيدها وتخربها.",
+    "ههههه تمام، هاي محسوبة إلك."
+  ],
+
+  love: [
+    "أحبك؟ خل أوصل مرحلة أتقبلك أولاً.",
+    "الحب مسؤولية، وإنت مسؤولياتك مو مبشرة.",
+    "أحبك بس من بعيد، حتى الشبكة ترتاح.",
+    "أحبك مثل ما أحب تحديثات الويندوز.",
+    "خل نبقى أصحاب أحسن، الوضع ما يطمن."
+  ],
+
+  joke: [
+    "مرة واحد سأل سؤال ذكي بالدسكورد، طلع مو إنت.",
+    "نكتتي اليوم؟ وجودك أونلاين.",
+    "مرة عقل دخل راسك، ضاع وما رجع.",
+    "مرة واحد گال عندي سالفة، طلعت رسالتك.",
+    "النكتة؟ إنك تنتظر مني احترام مجاني."
+  ]
+};
 
 const badWords = [
   "غبي",
   "حمار",
   "كلب",
-  "زاحف",
   "فاشل",
-  "تافه"
+  "تافه",
+  "زاحف",
+  "مطّي",
+  "ابن",
+  "كس",
+  "قح"
 ];
-
-function randomReply(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}
 
 function shouldReply(message) {
   const content = message.content.toLowerCase();
@@ -66,6 +96,23 @@ function shouldReply(message) {
   );
 }
 
+function pickReply(channelId, list) {
+  const recent = lastReplies.get(channelId) || [];
+
+  const available = list.filter(reply => !recent.includes(reply));
+  const pool = available.length ? available : list;
+
+  const reply = pool[Math.floor(Math.random() * pool.length)];
+
+  recent.push(reply);
+
+  if (recent.length > 5) recent.shift();
+
+  lastReplies.set(channelId, recent);
+
+  return reply;
+}
+
 client.once("clientReady", () => {
   console.log(`${client.user.tag} is online`);
 });
@@ -75,33 +122,36 @@ client.on("messageCreate", async (message) => {
   if (!message.guild) return;
   if (!shouldReply(message)) return;
 
-  const content = message.content.toLowerCase();
+  const channelId = message.channel.id;
+
+  const content = message.content
+    .replace(/<@!?(\d+)>/g, "")
+    .replace(/آدم/g, "")
+    .replace(/ادم/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (!content || content.includes("ماعندي شي") || content.includes("ماكو شي")) {
+    return message.reply(pickReply(channelId, replies.empty));
+  }
 
   if (content.includes("هههه") || content.includes("😂") || content.includes("😭")) {
-    return message.reply(randomReply(laughReplies));
-  }
-
-  if (badWords.some(word => content.includes(word))) {
-    return message.reply(randomReply(roastReplies));
-  }
-
-  if (content.includes("شلونك") || content.includes("شخبارك")) {
-    return message.reply("تمام، بس وجودك خله يومي أصعب شوية 😂");
+    return message.reply(pickReply(channelId, replies.laugh));
   }
 
   if (content.includes("تحبني")) {
-    return message.reply("أحبك؟ خل أوصل مرحلة أتقبلك أولاً 😭");
-  }
-
-  if (content.includes("منو احسن")) {
-    return message.reply("أكيد آني، والباقي ديكور.");
+    return message.reply(pickReply(channelId, replies.love));
   }
 
   if (content.includes("نكتة")) {
-    return message.reply("مرة واحد دخل دسكورد وسأل سؤال ذكي، طلع مو إنت.");
+    return message.reply(pickReply(channelId, replies.joke));
   }
 
-  return message.reply(randomReply(normalReplies));
+  if (badWords.some(word => content.includes(word))) {
+    return message.reply(pickReply(channelId, replies.roast));
+  }
+
+  return message.reply(pickReply(channelId, replies.normal));
 });
 
 client.login(process.env.DISCORD_TOKEN);
