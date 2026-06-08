@@ -72,7 +72,7 @@ function shouldReply(message) {
 
 function cleanMessage(text) {
   return text
-  .replace(/<@!?(\d+)>/g, "")
+    .replace(/<@!?(\d+)>/g, "")
     .replace(/آدم/g, "")
     .replace(/ادم/g, "")
     .trim();
@@ -101,7 +101,7 @@ client.on("messageCreate", async (message) => {
     await message.channel.sendTyping();
 
     const completion = await groq.chat.completions.create({
-      model: "llama-3.1-70b-versatile",
+      model: "llama-3.3-70b-versatile",
       temperature: 0.8,
       max_tokens: 200,
       messages: [
@@ -128,5 +128,3 @@ client.on("messageCreate", async (message) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
-
-
