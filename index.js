@@ -1,21 +1,4 @@
-const {
-  Client,
-  GatewayIntentBits,
-  REST,
-  Routes,
-  SlashCommandBuilder
-} = require("discord.js");
 
-const { Kazagumo } = require("kazagumo");
-const { Connectors } = require("shoukaku");
-
-const TOKEN = process.env.TOKEN;
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildVoiceStates
-  ]
 });
 
 const kazagumo = new Kazagumo(
