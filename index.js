@@ -168,5 +168,5 @@ kazagumo.on("playerStart", (player, track) => {
   }
 });
 
-client.login(TOKEN);
+client.login(
 
