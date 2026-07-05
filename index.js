@@ -1,155 +1,172 @@
-import { Client, GatewayIntentBits } from "discord.js";
-import OpenAI from "openai";
-import dotenv from "dotenv";
+const {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder
+} = require("discord.js");
 
-dotenv.config();
+const { Kazagumo } = require("kazagumo");
+const { Connectors } = require("shoukaku");
+
+const TOKEN = process.env.TOKEN;
 
 const client = new Client({
-intents: [
-GatewayIntentBits.Guilds,
-GatewayIntentBits.GuildMessages,
-GatewayIntentBits.MessageContent
-]
-});
-
-const groq = new OpenAI({
-apiKey: process.env.GROQ_API_KEY,
-baseURL: "https://api.groq.com/openai/v1"
-});
-
-const SYSTEM_PROMPT = `
-You are Adam.
-
-Always speak in clear Modern Standard Arabic.
-
-Do not use Iraqi dialect.
-Do not use Moroccan dialect.
-Do not use any local dialect.
-
-Your personality:
-
-intelligent
-funny
-sarcastic
-confident
-
-Answer the user's question directly.
-
-Keep responses short and natural.
-
-If someone jokes with you:
-reply with humor.
-
-If someone insults you:
-respond with a witty sarcastic reply.
-
-Never act like a formal AI assistant.
-
-Never say:
-"كيف يمكنني مساعدتك؟"
-
-Speak like an intelligent friend using modern standard Arabic.
-`;
-
-const memory = new Map();
-
-function getMemory(channelId) {
-if (!memory.has(channelId)) {
-memory.set(channelId, []);
-}
-
-return memory.get(channelId);
-}
-
-function addMemory(channelId, role, content) {
-const history = getMemory(channelId);
-
-history.push({
-role,
-content
-});
-
-if (history.length > 6) {
-history.shift();
-}
-}
-
-function shouldReply(message) {
-const content = message.content.toLowerCase();
-
-return (
-message.mentions.has(client.user) ||
-content.includes("ادم") ||
-content.includes("آدم")
-);
-}
-
-function cleanMessage(text) {
-return text
-.replace(/<@!?(\d+)>/g, "")
-.replace(/آدم/g, "")
-.replace(/ادم/g, "")
-.trim();
-}
-
-client.once("clientReady", () => {
-console.log(`${client.user.tag} is online`);
-});
-
-client.on("messageCreate", async (message) => {
-if (message.author.bot) return;
-if (!message.guild) return;
-if (!shouldReply(message)) return;
-
-const channelId = message.channel.id;
-const userText = cleanMessage(message.content);
-
-if (!userText) {
-await message.reply("ها ولك شتريد؟ 😆");
-return;
-}
-
-addMemory(channelId, "user", userText);
-
-try {
-await message.channel.sendTyping();
-
-const completion = await groq.chat.completions.create({
-  model: "llama-3.1-8b-instant",
-  temperature: 0.5,
-  max_tokens: 200,
-  messages: [
-    {
-      role: "system",
-      content: SYSTEM_PROMPT
-    },
-    ...getMemory(channelId)
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates
   ]
 });
 
-const reply =
-  completion.choices?.[0]?.message?.content ||
-  "ما فهمت عليك.";
+const kazagumo = new Kazagumo(
+  {},
+  new Connectors.DiscordJS(client),
+  [
+    {
+      name: "Iraq Lavalink",
+      url: "lavalink-server-tm0b.onrender.com:443",
+      auth: "iraq123",
+      secure: true
+    }
+  ]
+);
 
-addMemory(channelId, "assistant", reply);
+const commands = [
+  new SlashCommandBuilder()
+    .setName("play")
+    .setDescription("تشغيل أغنية")
+    .addStringOption(option =>
+      option.setName("song")
+        .setDescription("اسم الأغنية أو الرابط")
+        .setRequired(true)
+    ),
 
-await message.reply(reply.slice(0, 2000));
+  new SlashCommandBuilder().setName("skip").setDescription("تخطي الأغنية"),
+  new SlashCommandBuilder().setName("stop").setDescription("إيقاف الموسيقى"),
+  new SlashCommandBuilder().setName("pause").setDescription("إيقاف مؤقت"),
+  new SlashCommandBuilder().setName("resume").setDescription("تكملة التشغيل"),
+  new SlashCommandBuilder().setName("queue").setDescription("قائمة الانتظار"),
+  new SlashCommandBuilder().setName("nowplaying").setDescription("الأغنية الحالية")
+].map(command => command.toJSON());
 
-} catch (error) {
-console.error(error);
+client.once("ready", async () => {
+  console.log(`${client.user.tag} is online!`);
 
-if (error?.status === 429) {
-  await message.reply(
-    "خلص حد Groq حالياً، جرب بعد شوي."
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+
+  await rest.put(
+    Routes.applicationCommands(client.user.id),
+    { body: commands }
   );
-} else {
-  await message.reply(
-    "صار خطأ، شوف Logs مال Render."
-  );
-}
 
-}
+  console.log("Slash commands registered!");
 });
 
-client.login(process.env.DISCORD_TOKEN);
+kazagumo.shoukaku.on("ready", name => {
+  console.log(`Lavalink connected: ${name}`);
+});
+
+kazagumo.shoukaku.on("error", (name, error) => {
+  console.log(`Lavalink error ${name}:`, error);
+});
+
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  await interaction.deferReply();
+
+  const voiceChannel = interaction.member.voice.channel;
+
+  try {
+    if (interaction.commandName === "play") {
+      if (!voiceChannel) {
+        return interaction.editReply("لازم تدخل روم صوتي أولاً.");
+      }
+
+      const query = interaction.options.getString("song");
+
+      const result = await kazagumo.search(query, {
+        requester: interaction.user
+      });
+
+      if (!result.tracks.length) {
+        return interaction.editReply("ما لقيت الأغنية.");
+      }
+
+      const player = await kazagumo.createPlayer({
+        guildId: interaction.guild.id,
+        textId: interaction.channel.id,
+        voiceId: voiceChannel.id,
+        shardId: interaction.guild.shardId
+      });
+
+      player.queue.add(result.tracks[0]);
+
+      if (!player.playing && !player.paused) {
+        player.play();
+      }
+
+      return interaction.editReply(`تمت الإضافة: **${result.tracks[0].title}**`);
+    }
+
+    const player = kazagumo.players.get(interaction.guild.id);
+
+    if (!player) {
+      return interaction.editReply("ماكو شي يشتغل حالياً.");
+    }
+
+    if (interaction.commandName === "skip") {
+      player.skip();
+      return interaction.editReply("تم تخطي الأغنية.");
+    }
+
+    if (interaction.commandName === "stop") {
+      player.destroy();
+      return interaction.editReply("تم إيقاف الموسيقى.");
+    }
+
+    if (interaction.commandName === "pause") {
+      player.pause(true);
+      return interaction.editReply("تم الإيقاف المؤقت.");
+    }
+
+    if (interaction.commandName === "resume") {
+      player.pause(false);
+      return interaction.editReply("تمت المتابعة.");
+    }
+
+    if (interaction.commandName === "queue") {
+      if (!player.queue.length) {
+        return interaction.editReply("القائمة فارغة.");
+      }
+
+      const list = player.queue
+        .slice(0, 10)
+        .map((track, i) => `${i + 1}. ${track.title}`)
+        .join("\n");
+
+      return interaction.editReply(`**قائمة الانتظار:**\n${list}`);
+    }
+
+    if (interaction.commandName === "nowplaying") {
+      if (!player.queue.current) {
+        return interaction.editReply("ماكو أغنية حالياً.");
+      }
+
+      return interaction.editReply(`تشتغل الآن: **${player.queue.current.title}**`);
+    }
+  } catch (error) {
+    console.log(error);
+    return interaction.editReply("صار خطأ أثناء تشغيل الأمر.");
+  }
+});
+
+kazagumo.on("playerStart", (player, track) => {
+  const channel = client.channels.cache.get(player.textId);
+  if (channel) {
+    channel.send(`بدأ التشغيل: **${track.title}**`);
+  }
+});
+
+client.login(TOKEN);
 
